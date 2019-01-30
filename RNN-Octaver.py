@@ -6,16 +6,16 @@ import torch.utils.data
 
 #####################
 # Settings
-num_examples = 500000
+num_examples = 1000000
 batch_size = 64
-seq_length = 4
-input_size = 25
-hidden_size = 128
+seq_length = 16
+input_size = 4
+hidden_size = 32
 output_size = input_size
-num_layers = 1
+num_layers = 2
 dropout = 0.0
 
-epochs = 50
+epochs = 100
 lr = 0.0001
 #####################
 
@@ -50,10 +50,13 @@ class RNNNetwork(nn.Module):
     def init_hidden(self, batch_size):
         return torch.zeros((self.num_layers, batch_size, self.hidden_size))
         
-    def forward(self, X, h):
+    def forward(self, X):
+        
+        h = self.init_hidden(batch_size)
         X, h = self.rnn(X, h) 
         X = self.ll(X)
-        return X.view(X.size(0),-1), h
+        
+        return X.view(X.size(0),-1)
 
 #####################
 # Create dataset
@@ -86,12 +89,10 @@ for e in range(1,epochs+1):
     model.train()
     
     optimizer.zero_grad()
-    h = model.init_hidden(batch_size)
   
     for i,(x,y) in enumerate(data_loader,1):
         optimizer.zero_grad()
-        h = model.init_hidden(x.size(0))
-        y_pred, h = model(x.view(-1,seq_length,input_size),h)
+        y_pred = model(x.view(-1,seq_length,input_size))
         loss = criterion(y_pred,y)
         loss.backward()
         optimizer.step()
@@ -116,6 +117,10 @@ for epoch in training_results.keys():
 
 #################################
 # Test for different input signal
+
+model.eval()
+import time
+
 x = torch.tensor([float(x) for x in torch.arange(seq_length*input_size)])
 frequency = torch.randn(num_examples)/5
 amplitude = torch.add(torch.ones(seq_length*input_size,1), torch.randn(num_examples))
@@ -126,12 +131,17 @@ Y = amplitude.t()*torch.sin(0.5*torch.mm(frequency.view(-1,1),x.view(1,-1))+phas
 
 data_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(X,Y), batch_size=batch_size, shuffle=False, sampler=None, batch_sampler=None, num_workers=0)
 
+start_time = time.time()
+
 X,Y = next(iter(data_loader))
-h = model.init_hidden(batch_size)
-y_pred,h = model(X.view(-1,seq_length,input_size),h)
+y_pred = model(X.view(-1,seq_length,input_size))
+
+print("Delay : {:.3f} ms".format((time.time()-start_time)*100))
 
 fig, ax = plt.subplots(nrows=2, ncols=1)
 ax[0].plot(X[0,:].squeeze().detach().numpy(), color='b')
 ax[1].plot(Y[0,:].squeeze().detach().numpy(), color='g', ls='dashed')
 ax[1].plot(y_pred[0,:].squeeze().detach().numpy(), color='r')
+
+
 
